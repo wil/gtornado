@@ -1,9 +1,6 @@
 gtornado = Tornado + gevent
 ===========================
 
-:Author: Wil Tan
-:Version: $Revision: 
-
 
 Introduction
 ------------
