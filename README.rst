@@ -11,13 +11,14 @@ such as authentication via OpenID, OAuth, secure cookies, templates, CSRF protec
 
 Unfortunately, some of its features ties the developer into its own asynchronous API implementation.
 
-This module is an experiment to monkey patch it just enough to make it run under gevent.
+This module is an experiment to monkey patch it just enough to make it run under gevent_.
 One advantage of doing so is that one can use a coroutine-style and code in a blocking fashion
 while being able to use the tornado framework. For example, one could use Tornado's OpenID mixins, together with
 other libraries (perhaps AMQP or XMPP clients?) that may not otherwise be written to Tornado's asynchronous API and therefore would block the entire process.
 
 .. _Tornado: http://www.tornadoweb.org/
 .. _epoll: http://www.kernel.org/doc/man-pages/online/pages/man4/epoll.4.html
+.. _gevent: http://www.gevent.org/
 
 
 Monkey Patching
