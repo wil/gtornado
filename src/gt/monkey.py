@@ -9,12 +9,22 @@ def patch_tornado_ioloop():
     _IOLoop = _tornado_iol.IOLoop
 
     class IOLoop:
+        READ  = _IOLoop.READ
+        WRITE = _IOLoop.WRITE
+        ERROR = _IOLoop.ERROR
+
         def __init__(self):
             self._handlers = {} # by fd
             self._events = {} # by fd
 
         def start(self):
             gevent.hub.get_hub().switch()
+
+        def stop(self):
+            for e,fd in list(self._events.iteritems()):
+                self.remove_handler(e)
+
+            gevent.hub.shutdown()
 
         def remove_handler(self, fd):
             self._handlers.pop(fd, None)
@@ -23,20 +33,20 @@ def patch_tornado_ioloop():
 
         def update_handler(self, fd, events):
             handler = self._handlers.pop(fd, None)
-            ev = self._events[fd]
             self.remove_handler(fd)
             self.add_handler(fd, handler, events)
 
         def add_handler(self, fd, handler, events):
-            type = 0
+            type = gevent.core.EV_PERSIST
             if events & _IOLoop.READ:
                 type = type | gevent.core.EV_READ
             if events & _IOLoop.WRITE:
                 type = type | gevent.core.EV_WRITE
             if events & _IOLoop.ERROR:
-                type = type | gevent.core.EV_SIGNAL
+                type = type | gevent.core.EV_READ
 
             def callback(ev, type):
+                #print "ev=%r type=%r firing" % (ev, type)
                 tornado_events = 0
                 if type & gevent.core.EV_READ:
                     tornado_events |= _IOLoop.READ
@@ -46,7 +56,11 @@ def patch_tornado_ioloop():
                     tornado_events |= _IOLoop.ERROR
                 return handler(ev.fd, tornado_events)
 
-            self._events[fd] = gevent.core.event(type, fd, callback)
+            #print "add_handler(fd=%r, handler=%r, events=%r)" % (fd, handler, events)
+            #print "type => %r" % type
+            e = gevent.core.event(type, fd, callback)
+            e.add()
+            self._events[fd] = e
             self._handlers[fd] = handler
 
 
@@ -60,8 +74,8 @@ def patch_tornado_ioloop():
 
         @classmethod
         def instance(cls):
-            print "new instance?"
             if not hasattr(cls, "_instance"):
+                print "new instance?"
                 cls._instance = cls()
             return cls._instance
 
