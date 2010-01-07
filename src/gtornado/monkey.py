@@ -4,7 +4,7 @@ import gevent
 import gevent.hub
 import gevent.http
 
-def patch_tornado_ioloop():
+def patch_ioloop():
     _tornado_iol = __import__('tornado.ioloop', fromlist=['fromlist_has_to_be_non_empty'])
     _IOLoop = _tornado_iol.IOLoop
 
@@ -85,7 +85,7 @@ def patch_tornado_ioloop():
 
 
 
-def patch_tornado_httpserver():
+def patch_httpserver():
     from tornado.httpserver import HTTPRequest
 
     def parse_t_http_output(buf):
@@ -199,9 +199,7 @@ def patch_tornado_httpserver():
                 self._r.send_reply_chunk(chunk)
 
         def finish(self):
-            print "finishing..."
             self._r.send_reply_end()
-            print "finished"
 
 
     class GHttpServer:
@@ -247,7 +245,6 @@ def patch_tornado_httpserver():
 
         @classmethod
         def instance(cls):
-            print "new instance?"
             if not hasattr(cls, "_instance"):
                 cls._instance = cls()
             return cls._instance
@@ -256,6 +253,64 @@ def patch_tornado_httpserver():
     _httpserver.HTTPServer = GHttpServer
 
 
-def patch_tornado():
-    patch_tornado_ioloop()
-    patch_tornado_httpserver()
+def patch_all(ioloop=True, httpserver=True):
+    if ioloop:
+        print "Patching ioloop"
+        patch_ioloop()
+
+    if httpserver:
+        print "Patching httpserver"
+        patch_httpserver()
+
+
+# code below shamelessly stolen from gevent.monkey
+if __name__=='__main__':
+    import sys
+    modules = [x.replace('patch_', '') for x in globals().keys() if x.startswith('patch_') and x!='patch_all']
+    script_help = """gtornado.monkey - monkey patch the tornado modules to use gevent.
+
+USAGE: python -m gtornado.monkey [MONKEY OPTIONS] script [SCRIPT OPTIONS]
+
+If no OPTIONS present, monkey patches all the modules it can patch.
+You can exclude a module with --no-module, e.g. --no-thread. You can
+specify a module to patch with --module, e.g. --socket. In the latter
+case only the modules specified on the command line will be patched.
+
+MONKEY OPTIONS: --verbose %s""" % ', '.join('--[no-]%s' % m for m in modules)
+    args = {}
+    argv = sys.argv[1:]
+    verbose = False
+    default_yesno = True
+    while argv and argv[0].startswith('--'):
+        option = argv[0][2:]
+        if option == 'verbose':
+            verbose = True
+        elif option.startswith('no-') and option.replace('no-', '') in modules:
+            args[option[3:]] = False
+        elif option in modules:
+            args[option] = True
+            default_yesno = False
+        else:
+            sys.exit(script_help + '\n\n' + 'Cannot patch %r' % option)
+        del argv[0]
+
+    for m in modules:
+        if args and m not in args:
+            args[m] = default_yesno
+
+    if verbose:
+        import pprint, os
+        print 'gtornado.monkey.patch_all(%s)' % ', '.join('%s=%s' % item for item in args.items())
+        print 'sys.version=%s' % (sys.version.strip().replace('\n', ' '), )
+        print 'sys.path=%s' % pprint.pformat(sys.path)
+        print 'sys.modules=%s' % pprint.pformat(sorted(sys.modules.keys()))
+        print 'cwd=%s' % os.getcwd()
+
+    patch_all(**args)
+    if argv:
+        sys.argv = argv
+        __package__ = None
+        execfile(sys.argv[0])
+    else:
+        print script_help
+
